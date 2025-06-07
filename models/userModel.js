@@ -6,7 +6,8 @@ const userSchema = new mongoose.Schema({
   email:    { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role:     { type: String, default: "user", enum: ["user", "admin"] },
-  status:   { type: String, enum: ['active', 'inactive', 'dnd', 'away'], default: 'active' }
+  status:   { type: String, enum: ['active', 'inactive', 'dnd', 'away'], default: 'active' },
+  division: { type: String, required: true } // You can optionally use enum: ['Sales', 'IT', 'HR']
 });
 
 // Hash password before saving

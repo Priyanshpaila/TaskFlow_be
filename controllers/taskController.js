@@ -4,21 +4,35 @@ const User = require('../models/userModel');
 // Create a new task (Admin)
 exports.createTask = async (req, res) => {
   try {
-    // console.log("BODY:", req.body);
     const { title, description, assignedTo, priority, dueDate } = req.body;
 
+    // Get the logged-in admin's info
+    const admin = await User.findById(req.user._id);
+    if (!admin || admin.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admins can create tasks' });
+    }
+
+    // Check that all assigned users belong to the same division
+    const assignedUsers = await User.find({ _id: { $in: assignedTo } });
+    const invalidUsers = assignedUsers.filter(u => u.division !== admin.division);
+    if (invalidUsers.length > 0) {
+      return res.status(400).json({ message: 'Some users are not in your division' });
+    }
+
+    // Create task with division from admin
     const task = await Task.create({
       title,
       description,
       assignedTo,
       priority,
       dueDate,
-      createdBy: req.user._id,
+      createdBy: admin._id,
+      division: admin.division
     });
 
     res.status(201).json(task);
   } catch (err) {
-    console.error("ERROR:", err); 
+    console.error("ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -33,10 +47,18 @@ exports.getTasksForUser = async (req, res) => {
   }
 };
 
-// Get all tasks (Admin only)
+// Get all tasks (Admin only, filtered by division)
 exports.getAllTasks = async (req, res) => {
   try {
-    const tasks = await Task.find().populate('assignedTo', 'username email status').populate('createdBy', 'username');
+    const admin = await User.findById(req.user._id);
+    if (!admin || admin.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admins can view all tasks' });
+    }
+
+    const tasks = await Task.find({ division: admin.division })
+      .populate('assignedTo', 'username email status')
+      .populate('createdBy', 'username');
+
     res.json(tasks);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -47,11 +69,9 @@ exports.getAllTasks = async (req, res) => {
 exports.updateTaskStatus = async (req, res) => {
   try {
     const { status } = req.body;
-
     const task = await Task.findById(req.params.id);
 
     if (!task) return res.status(404).json({ message: 'Task not found' });
-
     if (!task.assignedTo.includes(req.user._id)) {
       return res.status(403).json({ message: 'Not authorized to update this task' });
     }
@@ -65,20 +85,31 @@ exports.updateTaskStatus = async (req, res) => {
   }
 };
 
-
-
-
+// Dashboard stats (filtered by division for admins)
 exports.getDashboardStats = async (req, res) => {
   try {
-    const now = new Date();
+    const admin = await User.findById(req.user._id);
+    if (!admin || admin.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admins can access stats' });
+    }
 
-    const [totalTasks, pendingTasks, inProgressTasks, completedTasks, overdueTasks, activeUsers] = await Promise.all([
-      Task.countDocuments(),
-      Task.countDocuments({ status: 'pending' }),
-      Task.countDocuments({ status: 'in_progress' }),
-      Task.countDocuments({ status: 'completed' }),
-      Task.countDocuments({ dueDate: { $lt: now }, status: { $ne: 'completed' } }),
-      User.countDocuments({ status: 'active' }),
+    const now = new Date();
+    const query = { division: admin.division };
+
+    const [
+      totalTasks,
+      pendingTasks,
+      inProgressTasks,
+      completedTasks,
+      overdueTasks,
+      activeUsers
+    ] = await Promise.all([
+      Task.countDocuments(query),
+      Task.countDocuments({ ...query, status: 'pending' }),
+      Task.countDocuments({ ...query, status: 'in_progress' }),
+      Task.countDocuments({ ...query, status: 'completed' }),
+      Task.countDocuments({ ...query, dueDate: { $lt: now }, status: { $ne: 'completed' } }),
+      User.countDocuments({ division: admin.division, status: 'active' }),
     ]);
 
     res.json({
@@ -94,7 +125,7 @@ exports.getDashboardStats = async (req, res) => {
   }
 };
 
-
+// Upload attachments to task
 exports.uploadAttachment = async (req, res) => {
   try {
     const taskId = req.params.id;
@@ -115,4 +146,3 @@ exports.uploadAttachment = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
