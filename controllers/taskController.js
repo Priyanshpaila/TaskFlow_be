@@ -146,3 +146,80 @@ exports.uploadAttachment = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+
+// Create a new task (Admin or User)
+exports.createTaskByAnyUser = async (req, res) => {
+  try {
+    const { title, description, assignedTo, priority, dueDate } = req.body;
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(401).json({ message: 'Unauthorized user' });
+    }
+
+    const assignedUsers = await User.find({ _id: { $in: assignedTo } });
+
+    // Create task with division from current user
+    const task = await Task.create({
+      title,
+      description,
+      assignedTo: [user._id], // 🔒 Assign only to self
+      priority,
+      dueDate,
+      createdBy: user._id,
+      division: user.division, // still associate with user's division
+    });
+
+    res.status(201).json(task);
+  } catch (err) {
+    console.error("ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Edit an existing task (Admin or Task Creator)
+exports.editTask = async (req, res) => {
+  try {
+    const { title, description, assignedTo, priority, dueDate } = req.body;
+    const taskId = req.params.id;
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(401).json({ message: 'Unauthorized user' });
+
+    const task = await Task.findById(taskId);
+    if (!task) return res.status(404).json({ message: 'Task not found' });
+
+    // Only allow admins or the task creator to edit
+    const isAdmin = user.role === 'admin';
+    const isCreator = task.createdBy.toString() === req.user._id;
+
+    if (!isAdmin && !isCreator) {
+      return res.status(403).json({ message: 'You are not authorized to edit this task' });
+    }
+
+    // If assignedTo is updated, verify division matches (only for admin)
+    if (assignedTo && isAdmin) {
+      const assignedUsers = await User.find({ _id: { $in: assignedTo } });
+      const invalidUsers = assignedUsers.filter(u => u.division !== user.division);
+      if (invalidUsers.length > 0) {
+        return res.status(400).json({ message: 'Some assigned users are not in your division' });
+      }
+      task.assignedTo = assignedTo;
+    }
+
+    // Update fields
+    if (title) task.title = title;
+    if (description) task.description = description;
+    if (priority) task.priority = priority;
+    if (dueDate) task.dueDate = dueDate;
+
+    await task.save();
+
+    res.json({ message: 'Task updated', task });
+  } catch (err) {
+    console.error('Edit Task Error:', err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
