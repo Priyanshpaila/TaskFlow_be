@@ -40,12 +40,29 @@ exports.createTask = async (req, res) => {
 // Get tasks assigned to the logged-in user
 exports.getTasksForUser = async (req, res) => {
   try {
-    const tasks = await Task.find({ assignedTo: req.user._id }).sort({ dueDate: 1 });
+    const userId = req.user._id;
+
+    // Find all admin user IDs
+    const adminUsers = await User.find({ role: 'admin' }).select('_id');
+    const adminIds = adminUsers.map(admin => admin._id);
+
+    // Fetch tasks:
+    // (1) assigned to user AND created by admin
+    // OR (2) created by user AND assigned to self (personal tasks)
+    const tasks = await Task.find({
+      $or: [
+        { assignedTo: userId, createdBy: { $in: adminIds } }, // assigned by admin
+        { assignedTo: userId, createdBy: userId },            // personal task
+      ],
+    }).sort({ dueDate: 1 });
+
     res.json(tasks);
   } catch (err) {
+    console.error('Error fetching tasks for user:', err);
     res.status(500).json({ message: err.message });
   }
 };
+
 
 // Get all tasks (Admin only, filtered by division)
 exports.getAllTasks = async (req, res) => {

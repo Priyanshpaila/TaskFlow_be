@@ -8,6 +8,7 @@ const {
   updateTaskStatus,
   getDashboardStats,
   uploadAttachment,
+  editTask,
 } = require("../controllers/taskController");
 
 const { protect, adminOnly } = require("../middlewares/authMiddleware");
