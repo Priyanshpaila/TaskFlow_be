@@ -68,19 +68,31 @@ exports.getTasksForUser = async (req, res) => {
 exports.getAllTasks = async (req, res) => {
   try {
     const admin = await User.findById(req.user._id);
+    const adminUsers = await User.find({ role: 'admin' }).select('_id');
+    const adminIds = adminUsers.map(a => a._id);
+
     if (!admin || admin.role !== 'admin') {
       return res.status(403).json({ message: 'Only admins can view all tasks' });
     }
 
-    const tasks = await Task.find({ division: admin.division })
-      .populate('assignedTo', 'username email status')
-      .populate('createdBy', 'username');
+    const tasks = await Task.find({
+      division: admin.division,
+      $or: [
+        { createdBy: { $in: adminIds } },
+        { assignedTo: admin._id }
+      ],
+      isPersonalTask: { $ne: true }
+    })
+    .populate('assignedTo', 'username email status')
+    .populate('createdBy', 'username');
 
     res.json(tasks);
   } catch (err) {
+    console.error("Admin task fetch error:", err);
     res.status(500).json({ message: err.message });
   }
 };
+
 
 // Update task status (User)
 exports.updateTaskStatus = async (req, res) => {
@@ -201,21 +213,21 @@ exports.editTask = async (req, res) => {
     const { title, description, assignedTo, priority, dueDate } = req.body;
     const taskId = req.params.id;
 
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user.id); // ✅ use `id` instead of `_id`
     if (!user) return res.status(401).json({ message: 'Unauthorized user' });
 
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: 'Task not found' });
 
-    // Only allow admins or the task creator to edit
+    // ✅ Fix comparison using correct user field
     const isAdmin = user.role === 'admin';
-    const isCreator = task.createdBy.toString() === req.user._id;
+    const isCreator = task.createdBy.toString() === req.user.id;
 
     if (!isAdmin && !isCreator) {
       return res.status(403).json({ message: 'You are not authorized to edit this task' });
     }
 
-    // If assignedTo is updated, verify division matches (only for admin)
+    // ✅ Division check for admin when assigning users
     if (assignedTo && isAdmin) {
       const assignedUsers = await User.find({ _id: { $in: assignedTo } });
       const invalidUsers = assignedUsers.filter(u => u.division !== user.division);
@@ -225,7 +237,7 @@ exports.editTask = async (req, res) => {
       task.assignedTo = assignedTo;
     }
 
-    // Update fields
+    // ✅ Update editable fields
     if (title) task.title = title;
     if (description) task.description = description;
     if (priority) task.priority = priority;
@@ -239,4 +251,3 @@ exports.editTask = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-

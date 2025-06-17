@@ -20,6 +20,7 @@ exports.registerUser = async (req, res) => {
 
   const user = await User.create({ username, email, password, division });
 
+ 
   res.status(201).json({
     id: user._id,
     username: user.username,
