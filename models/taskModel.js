@@ -25,7 +25,7 @@ const taskSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ['pending', 'in_progress', 'completed'],
+      enum: ['pending', 'in_progress', 'completed', 'forward', 'abort'],
       default: 'pending',
     },
 
@@ -39,7 +39,12 @@ const taskSchema = new mongoose.Schema(
     division: {
       type: String,
       required: true,
-    }
+    },
+
+    reason: {
+      type: String,
+      default: '',
+    },
   },
   { timestamps: true }
 );

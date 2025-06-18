@@ -95,24 +95,61 @@ exports.getAllTasks = async (req, res) => {
 
 
 // Update task status (User)
+// Update task status (User)
 exports.updateTaskStatus = async (req, res) => {
   try {
-    const { status } = req.body;
-    const task = await Task.findById(req.params.id);
+    const { status, reason } = req.body;
+    const userId = req.user._id;
 
+    const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ message: 'Task not found' });
-    if (!task.assignedTo.includes(req.user._id)) {
+
+    // Ensure the task is assigned to the current user
+    if (!task.assignedTo.includes(userId)) {
       return res.status(403).json({ message: 'Not authorized to update this task' });
     }
 
-    task.status = status;
-    await task.save();
+    if (status === 'forward') {
+      // Reason is mandatory
+      if (!reason || reason.trim() === '') {
+        return res.status(400).json({ message: 'Reason is required when forwarding a task' });
+      }
 
+      // Update reason and set dueDate to tomorrow
+      task.reason = reason;
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      task.dueDate = tomorrow;
+
+      // Automatically change status back to pending
+      task.status = 'pending';
+
+    } else if (status === 'abort') {
+      // Reason is mandatory
+      if (!reason || reason.trim() === '') {
+        return res.status(400).json({ message: 'Reason is required when aborting a task' });
+      }
+
+      task.reason = reason;
+      task.status = 'abort';
+
+    } else {
+      // Other status updates
+      task.status = status;
+    }
+
+
+
+    await task.save();
     res.json(task);
+
   } catch (err) {
+    console.error('Status update error:', err);
     res.status(500).json({ message: err.message });
   }
 };
+
 
 // Dashboard stats (filtered by division for admins)
 exports.getDashboardStats = async (req, res) => {
@@ -242,6 +279,8 @@ exports.editTask = async (req, res) => {
     if (description) task.description = description;
     if (priority) task.priority = priority;
     if (dueDate) task.dueDate = dueDate;
+
+
 
     await task.save();
 
