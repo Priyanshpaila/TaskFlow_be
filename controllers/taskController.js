@@ -94,7 +94,7 @@ exports.getAllTasks = async (req, res) => {
 };
 
 
-// Update task status (User)
+
 // Update task status (User)
 exports.updateTaskStatus = async (req, res) => {
   try {
@@ -121,9 +121,10 @@ exports.updateTaskStatus = async (req, res) => {
       tomorrow.setDate(tomorrow.getDate() + 1);
 
       task.dueDate = tomorrow;
+      task.status = 'forward';
 
       // Automatically change status back to pending
-      task.status = 'pending';
+      // task.status = 'pending';
 
     } else if (status === 'abort') {
       // Reason is mandatory
